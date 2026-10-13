@@ -5,9 +5,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 import { playAudioUrl } from '@/services/audio';
+import { getLanguageByCode } from '@/types/language';
+import { ApiWord } from '@/services/api';
 
 interface PhraseWordsProps {
-  hausa: string;
+  phraseId: string;
+  targetLanguage?: string;
 }
 
 function normalize(token: string): string {
@@ -18,25 +21,31 @@ function normalize(token: string): string {
 }
 
 /**
- * Breaks the Hausa line into words and highlights the ones the dictionary
- * knows about. Tapping a highlighted word plays that word's audio, which is
- * the fastest way to hear the pronunciation of an unfamiliar phrase.
+ * Breaks the target language line into words and highlights the ones the dictionary
+ * knows about. Tapping a highlighted word plays that word's audio.
  */
-export function PhraseWords({ hausa }: PhraseWordsProps) {
+export function PhraseWords({ phraseId, targetLanguage }: PhraseWordsProps) {
   const colors = useColors();
-  const { rawWords } = useApp();
+  const { rawWords, getPhraseById, targetLanguage: currentTargetLanguage } = useApp();
   const [playingId, setPlayingId] = useState<string | null>(null);
+  
+  const lang = targetLanguage ?? currentTargetLanguage;
+  
+  const phrase = getPhraseById(phraseId);
+  const translation = phrase?.translations[lang] ?? '';
+  
+  if (!translation) return null;
 
   const lookup = useMemo(() => {
-    const map = new Map<string, (typeof rawWords)[number]>();
+    const map = new Map<string, ApiWord>();
     for (const word of rawWords) {
-      const key = normalize(word.hausa);
+      const key = normalize(word.translations[lang] ?? '');
       if (key && !map.has(key)) map.set(key, word);
     }
     return map;
-  }, [rawWords]);
+  }, [rawWords, lang]);
 
-  const tokens = useMemo(() => hausa.trim().split(/\s+/).filter(Boolean), [hausa]);
+  const tokens = useMemo(() => translation.trim().split(/\s+/).filter(Boolean), [translation]);
   const matched = useMemo(
     () => tokens.map((token) => ({ token, word: lookup.get(normalize(token)) })),
     [lookup, tokens],
@@ -77,7 +86,8 @@ export function PhraseWords({ hausa }: PhraseWordsProps) {
             );
           }
 
-          const url = word.audio?.url;
+          const audioMap = (word.audio ?? {}) as Record<string, string | null | undefined>;
+          const url = audioMap[lang] ?? audioMap['en'];
           const isPlaying = playingId === word._id;
           return (
             <Pressable
@@ -93,7 +103,7 @@ export function PhraseWords({ hausa }: PhraseWordsProps) {
                 pressed && url ? styles.pressed : null,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`${word.hausa} means ${word.english}`}
+              accessibilityLabel={`${word.translations[lang] ?? token} means ${word.translations['en'] ?? ''}`}
             >
               <Text
                 style={[
@@ -114,7 +124,7 @@ export function PhraseWords({ hausa }: PhraseWordsProps) {
                 ]}
                 numberOfLines={1}
               >
-                {isPlaying ? 'playing…' : word.english}
+                {isPlaying ? 'playing…' : word.translations['en'] ?? ''}
               </Text>
             </Pressable>
           );

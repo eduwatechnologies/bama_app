@@ -160,7 +160,7 @@ export function RecordPronunciation({ phraseId, languageLabel, embedded = false 
     }
     show({
       title: 'Microphone needed',
-      message: 'Allow microphone access so you can record your pronunciation and compare it to the Hausa phrase.',
+      message: 'Allow microphone access so you can record your pronunciation and compare it to the phrase.',
       variant: 'warning',
       buttons: [{ label: 'Got it', style: 'default' }],
     });
@@ -413,10 +413,9 @@ export function RecordPronunciation({ phraseId, languageLabel, embedded = false 
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: colors.foreground }]}>Contribute Pronunciation</Text>
             <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-              {/* {languageLabel
-                ? `Record yourself saying the ${languageLabel} phrase. Tap to record, tap again to save.`
-                : 'Record yourself saying the phrase. Tap to record, tap again to save.'} */}
-                Record a natural Hausa voice
+              {languageLabel
+                ? `Record a natural ${languageLabel} voice`
+                : 'Record a natural voice'}
             </Text>
           </View>
         </View>

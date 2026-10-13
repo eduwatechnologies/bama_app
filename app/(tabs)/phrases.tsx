@@ -52,7 +52,11 @@ export default function PhrasesScreen() {
     const normalized = query.trim().toLocaleLowerCase();
     return effectivePhrases.filter((item) => {
       const inCategory = !category || item.category === category;
-      const matchesSearch = !normalized || item.english.toLocaleLowerCase().includes(normalized) || item.hausa.toLocaleLowerCase().includes(normalized);
+      const matchesSearch =
+        !normalized ||
+        Object.values(item.translations).some((text) =>
+          text.toLocaleLowerCase().includes(normalized),
+        );
       return inCategory && matchesSearch;
     });
   }, [category, query, effectivePhrases]);
@@ -69,7 +73,7 @@ export default function PhrasesScreen() {
           <View>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>OFFLINE PHRASEBOOK</Text>
             <Text style={[styles.title, { color: colors.foreground }]}>Find the right words.</Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Search in English or Hausa, then tap a phrase to see it.</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Search in any language, then tap a phrase to see it.</Text>
             <View style={styles.searchWrap}><SearchBar value={query} onChangeText={setQuery} /></View>
             <FlatList
               data={filterItems}
@@ -96,7 +100,7 @@ export default function PhrasesScreen() {
           </View>
         }
         renderItem={({ item }) => <PhraseCard phrase={item} onPress={() => router.push(`/phrase/${item.id}`)} />}
-        ListEmptyComponent={<EmptyState title="No phrase found" message="Try another English or Hausa word, or browse the full phrasebook." />}
+        ListEmptyComponent={<EmptyState title="No phrase found" message="Try another word in any language, or browse the full phrasebook." />}
         ListFooterComponent={<AdsFeed placement={AD_PLACEMENTS.PHRASES_BOTTOM} />}
       />
     </View>

@@ -13,27 +13,47 @@ import { PhraseCard } from '@/components/PhraseCard';
 import { useRouter } from 'expo-router';
 import { AdsFeed } from '@/components/AdsFeed';
 import { AD_PLACEMENTS } from '@/constants/ads';
+import { getLanguageByCode, BASE_LANGUAGE_CODE } from '@/types/language';
 
 export default function TranslateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ direction?: string }>();
-  const { direction: savedDirection, setDirection, phrases, isSyncing, lastSyncError } = useApp();
-  const direction = params.direction === 'hausa-to-english' ? 'hausa-to-english' : savedDirection;
+  const params = useLocalSearchParams<{ sourceLang?: string; targetLang?: string }>();
+  const {
+    targetLanguage: savedTargetLanguage,
+    setTargetLanguage,
+    baseLanguage,
+    phrases,
+    isSyncing,
+    lastSyncError
+  } = useApp();
+  
+  // Use URL params or saved preferences
+  const targetLanguage = params.targetLang ?? savedTargetLanguage;
+  const sourceLanguage = params.sourceLang ?? baseLanguage;
+  
   const [input, setInput] = useState('');
   const useStaticFallback = !phrases.length && !isSyncing;
   const effectivePhrases = useStaticFallback ? staticPhrases : phrases;
+  
   const result = useMemo(
-    () => findOfflineTranslation(input, direction, effectivePhrases),
-    [direction, effectivePhrases, input],
+    () => findOfflineTranslation(input, sourceLanguage, targetLanguage, effectivePhrases),
+    [sourceLanguage, targetLanguage, effectivePhrases, input],
   );
+  
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
-  const isEnglishFirst = direction === 'english-to-hausa';
+  
+  const sourceLangInfo = getLanguageByCode(sourceLanguage);
+  const targetLangInfo = getLanguageByCode(targetLanguage);
+  const sourceLabel = sourceLangInfo?.name.toUpperCase() ?? sourceLanguage.toUpperCase();
+  const targetLabel = targetLangInfo?.name.toUpperCase() ?? targetLanguage.toUpperCase();
 
   const swap = () => {
-    const next = isEnglishFirst ? 'hausa-to-english' : 'english-to-hausa';
-    setDirection(next);
+    // Swap source and target languages
+    setTargetLanguage(sourceLanguage);
+    // Note: baseLanguage is fixed to 'en', so we can't swap to make target the source
+    // Instead, we just clear input and let user change target language via selector
     setInput('');
   };
 
@@ -42,39 +62,51 @@ export default function TranslateScreen() {
       <Text style={[styles.eyebrow, { color: colors.primary }]}>OFFLINE LOOKUP</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>Say what you mean.</Text>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Look up a phrase or a single word from the offline phrasebook. Closest match is shown when there is no exact entry.</Text>
-      <LanguageSelector direction={direction} onChange={(next) => { setDirection(next); setInput(''); }} />
+      
+      <View style={styles.languageRow}>
+        <LanguageSelector
+          targetLanguage={targetLanguage}
+          onChange={(next) => { setTargetLanguage(next); setInput(''); }}
+          baseLanguage={baseLanguage}
+          showModal={true}
+        />
+        <Pressable onPress={swap} style={[styles.swapButton, { borderColor: colors.border, backgroundColor: colors.secondary }]} accessibilityRole="button" accessibilityLabel="Swap languages">
+          <Feather name="repeat" size={16} color={colors.secondaryForeground} />
+        </Pressable>
+        <LanguageSelector
+          targetLanguage={sourceLanguage}
+          onChange={() => {}} // Source is fixed to base language for now
+          baseLanguage={baseLanguage}
+          showModal={false}
+        />
+      </View>
 
       <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.inputLabelRow}>
-          <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{isEnglishFirst ? 'ENGLISH' : 'HAUSA'}</Text>
+          <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>{sourceLabel}</Text>
           <Text style={[styles.offlineLabel, { color: colors.accentForeground }]}><Feather name="wifi-off" size={12} color={colors.accentForeground} />  OFFLINE</Text>
         </View>
         <TextInput
           testID="translation-input"
           value={input}
           onChangeText={setInput}
-          placeholder={isEnglishFirst ? 'Type a phrase, like “sit down”' : 'Type a phrase, like “Zauna”'}
+          placeholder={`Type a phrase in ${sourceLangInfo?.nativeName ?? sourceLanguage}`}
           placeholderTextColor={colors.mutedForeground}
           multiline
           style={[styles.input, { color: colors.foreground }]}
-          accessibilityLabel={isEnglishFirst ? 'English phrase' : 'Hausa phrase'}
+          accessibilityLabel={`${sourceLabel} phrase`}
         />
         {input.length > 0 ? <Pressable onPress={() => setInput('')} style={styles.clear} accessibilityRole="button" accessibilityLabel="Clear translation input"><Feather name="x" size={18} color={colors.mutedForeground} /></Pressable> : null}
       </View>
 
-      <Pressable onPress={swap} style={[styles.swapButton, { borderColor: colors.border, backgroundColor: colors.secondary }]} accessibilityRole="button" accessibilityLabel="Swap language direction">
-        <Feather name="repeat" size={16} color={colors.secondaryForeground} />
-        <Text style={[styles.swapText, { color: colors.secondaryForeground }]}>Swap direction</Text>
-      </Pressable>
-
       <View style={[styles.resultCard, { backgroundColor: result.kind === 'match' ? colors.accent : colors.secondary, borderColor: result.kind === 'match' ? '#c1d9c7' : colors.border }]}>
-        <Text style={[styles.resultLabel, { color: colors.mutedForeground }]}>{isEnglishFirst ? 'HAUSA' : 'ENGLISH'}</Text>
+        <Text style={[styles.resultLabel, { color: colors.mutedForeground }]}>{targetLabel}</Text>
         {result.kind === 'match' && result.phrase ? (
           <>
             <Text style={[styles.resultText, { color: colors.foreground }]}>{result.translation}</Text>
             <Text style={[styles.resultPronunciation, { color: colors.accentForeground }]}>Pronunciation: {result.phrase.pronunciation}</Text>
             {result.matchKind === 'approximate' ? (
-              <Text style={[styles.matchHint, { color: colors.accentForeground }]}>Closest match for “{result.source}”</Text>
+              <Text style={[styles.matchHint, { color: colors.accentForeground }]}>Closest match for "{result.source}"</Text>
             ) : null}
             <Pressable onPress={() => router.push(`/phrase/${result.phrase?.id}`)} style={styles.openPhrase} accessibilityRole="button"><Text style={[styles.openPhraseText, { color: colors.accentForeground }]}>Open phrase details <Feather name="arrow-up-right" size={13} color={colors.accentForeground} /></Text></Pressable>
           </>
@@ -95,11 +127,11 @@ export default function TranslateScreen() {
               onPress={() => router.push(`/phrase/${item.id}`)}
               style={[styles.suggestionRow, { backgroundColor: colors.card, borderColor: colors.border }]}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${item.english}`}
+              accessibilityLabel={`Open ${item.translations[sourceLanguage] ?? item.id}`}
             >
               <View style={styles.suggestionCopy}>
-                <Text style={[styles.suggestionEnglish, { color: colors.foreground }]}>{item.english}</Text>
-                <Text style={[styles.suggestionHausa, { color: colors.mutedForeground }]}>{item.hausa}</Text>
+                <Text style={[styles.suggestionSource, { color: colors.foreground }]}>{item.translations[sourceLanguage] ?? ''}</Text>
+                <Text style={[styles.suggestionTarget, { color: colors.mutedForeground }]}>{item.translations[targetLanguage] ?? ''}</Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </Pressable>
@@ -107,7 +139,7 @@ export default function TranslateScreen() {
         </View>
       ) : null}
 
-      {result.kind !== 'match' && input.trim().length === 0 ? <EmptyState icon="message-square" title="Start with a known phrase" message="Try “Good morning”, “sit down”, or “Zauna” to see an offline result." /> : null}
+      {result.kind !== 'match' && input.trim().length === 0 ? <EmptyState icon="message-square" title="Start with a known phrase" message={`Try "Good morning", "sit down", or "Zauna" to see an offline result.`} /> : null}
       {result.kind === 'match' && result.phrase && result.matchKind === 'exact' ? <PhraseCard phrase={result.phrase} onPress={() => router.push(`/phrase/${result.phrase?.id}`)} compact /> : null}
       {!effectivePhrases.length ? (
         <Text style={[styles.syncNote, { color: colors.mutedForeground }]}>
@@ -128,13 +160,14 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 1.4 },
   title: { fontFamily: 'Inter_700Bold', fontSize: 29, lineHeight: 36, marginTop: 8 },
   subtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18, maxWidth: 330 },
+  languageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 },
   inputCard: { borderWidth: 1, borderRadius: 19, padding: 17, marginTop: 17, minHeight: 156 },
   inputLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   inputLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1.3 },
   offlineLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 10 },
   input: { flex: 1, minHeight: 90, fontFamily: 'Inter_500Medium', fontSize: 18, lineHeight: 26, paddingTop: 15, paddingBottom: 0, textAlignVertical: 'top' },
   clear: { position: 'absolute', right: 15, bottom: 15, padding: 5 },
-  swapButton: { minHeight: 43, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, alignSelf: 'center', paddingHorizontal: 15, marginTop: 11 },
+  swapButton: { minHeight: 43, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 15 },
   swapText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   resultCard: { borderWidth: 1, borderRadius: 19, padding: 18, marginTop: 16, minHeight: 130 },
   resultLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1.3 },
@@ -149,7 +182,7 @@ const styles = StyleSheet.create({
   suggestionsLabel: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1.3 },
   suggestionRow: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   suggestionCopy: { flex: 1, gap: 2 },
-  suggestionEnglish: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  suggestionHausa: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+  suggestionSource: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  suggestionTarget: { fontFamily: 'Inter_400Regular', fontSize: 12 },
   syncNote: { fontFamily: 'Inter_400Regular', fontSize: 12, textAlign: 'center', marginTop: 16 },
 });

@@ -24,12 +24,9 @@
     "doctor": "npx expo-doctor",
     "test": "echo \"No tests configured\" && exit 0",
     "postinstall": "node scripts/patch-expo-audio.js",
-
-
     "build:dev": "eas build --profile development",
     "build:preview": "eas build --profile preview",
     "build:production": "eas build --profile production",
-
     "update": "eas update",
     "update:dev": "eas update --channel development",
     "update:preview": "eas update --channel preview",
@@ -44,7 +41,6 @@
     "expo": "~54.0.27",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
-    "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.11",
     "expo-file-system": "~19.0.24",
@@ -62,6 +58,7 @@
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
     "expo-updates": "~29.0.20",
+    "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",

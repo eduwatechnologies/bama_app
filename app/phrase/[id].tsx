@@ -14,13 +14,24 @@ import { ReportPhraseSheet } from '@/components/ReportPhraseSheet';
 import { playPhraseAudio } from '@/services/audio';
 import { AdsFeed } from '@/components/AdsFeed';
 import { AD_PLACEMENTS } from '@/constants/ads';
+import { getLanguageByCode, BASE_LANGUAGE_CODE } from '@/types/language';
 
 export default function PhraseDetailScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isFavorite, toggleFavorite, getPhraseById, phrases, isSyncing } = useApp();
+  const {
+    isFavorite,
+    toggleFavorite,
+    getPhraseById,
+    phrases,
+    isSyncing,
+    targetLanguage,
+    baseLanguage,
+    getTranslation,
+    getAudioUrl
+  } = useApp();
   const useStaticFallback = !phrases.length && !isSyncing;
   const phrase = useStaticFallback ? staticPhrases.find((item) => item.id === id) : getPhraseById(id ?? '');
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
@@ -30,8 +41,14 @@ export default function PhraseDetailScreen() {
     return <View style={[styles.missing, { backgroundColor: colors.background, paddingTop: topInset }]}><EmptyState icon="alert-circle" title="Phrase not found" message="This phrase is not in the offline phrasebook." /></View>;
   }
   const favorite = isFavorite(phrase.id);
+  
+  const translation = getTranslation(phrase);
+  const audioUrl = getAudioUrl(phrase);
+  const targetLangInfo = getLanguageByCode(targetLanguage);
+  const targetLabel = targetLangInfo?.name.toUpperCase() ?? targetLanguage.toUpperCase();
 
- 
+  
+
 
   
 
@@ -39,24 +56,24 @@ export default function PhraseDetailScreen() {
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.content, { paddingTop: topInset + 12, paddingBottom: Platform.OS === 'web' ? 40 : 28 }]} showsVerticalScrollIndicator={false}>
       <Pressable onPress={() => router.back()} style={styles.back} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /><Text style={[styles.backText, { color: colors.foreground }]}>Phrasebook</Text></Pressable>
       <View style={[styles.badge, { backgroundColor: colors.secondary }]}><Feather name="bookmark" size={13} color={colors.mutedForeground} /><Text style={[styles.badgeText, { color: colors.mutedForeground }]}>{phrase.category}</Text></View>
-      <Text style={[styles.english, { color: colors.foreground }]}>{phrase.english}</Text>
+      <Text style={[styles.source, { color: colors.foreground }]}>{phrase.translations[baseLanguage] ?? ''}</Text>
       <View style={[styles.translationCard, { backgroundColor: colors.primary }]}>
-        <Text style={styles.translationLabel}>HAUSA</Text>
-        <Text style={styles.hausa}>{phrase.hausa}</Text>
+        <Text style={styles.translationLabel}>{targetLabel}</Text>
+        <Text style={styles.target}>{translation}</Text>
         <View style={styles.cardRule} />
         <Text style={styles.pronunciationLabel}>PRONUNCIATION</Text>
         
           <View style={styles.pronunciationRow}>
-            <Pressable onPress={() => phrase.audioUrl && void playPhraseAudio(phrase)} disabled={!phrase.audioUrl} style={styles.pronunciationPlay} accessibilityRole="button" accessibilityLabel={phrase.audioUrl ? `Listen to pronunciation for ${phrase.english}` : 'Audio not available'}>
-              <Feather name={phrase.audioUrl ? 'play' : 'volume-x'} size={16} color={phrase.audioUrl ? '#fffdf9' : colors.mutedForeground} />
+            <Pressable onPress={() => audioUrl && void playPhraseAudio(phrase, audioUrl)} disabled={!audioUrl} style={styles.pronunciationPlay} accessibilityRole="button" accessibilityLabel={audioUrl ? `Listen to pronunciation for ${translation}` : 'Audio not available'}>
+              <Feather name={audioUrl ? 'play' : 'volume-x'} size={16} color={audioUrl ? '#fffdf9' : colors.mutedForeground} />
             </Pressable>
             <View style={styles.pronunciationTextWrap}>
-              <Text style={[styles.pronunciation, { color: phrase.audioUrl ? '#fffdf9' : colors.mutedForeground }]}>{phrase.pronunciation}</Text>
+              <Text style={[styles.pronunciation, { color: audioUrl ? '#fffdf9' : colors.mutedForeground }]}>{phrase.pronunciation}</Text>
             </View>
           </View>
       </View>
 
-      {/* <PhraseWords hausa={phrase.hausa} /> */}
+      <PhraseWords phraseId={phrase.id} targetLanguage={targetLanguage} />
 
       <View style={styles.actionRow}>
         <AudioButton phrase={phrase} />
@@ -67,7 +84,6 @@ export default function PhraseDetailScreen() {
       </View>
 
      
-
       <RelatedPhrases current={phrase} />
 
       <AdsFeed placement={AD_PLACEMENTS.PHRASE_DETAIL_BOTTOM} />
@@ -90,8 +106,10 @@ export default function PhraseDetailScreen() {
       <ReportPhraseSheet
         visible={reporting}
         phraseId={phrase.id}
-        english={phrase.english}
-        hausa={phrase.hausa}
+        sourceText={phrase.translations[baseLanguage] ?? ''}
+        targetText={phrase.translations[targetLanguage] ?? ''}
+        sourceLabel={getLanguageByCode(baseLanguage)?.name ?? 'English'}
+        targetLabel={targetLangInfo?.name ?? 'Target'}
         contentType={phrase.contentType}
         onClose={() => setReporting(false)}
       />
@@ -106,10 +124,10 @@ const styles = StyleSheet.create({
   backText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   badge: { alignSelf: 'flex-start', borderRadius: 11, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 24 },
   badgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
-  english: { fontFamily: 'Inter_700Bold', fontSize: 30, lineHeight: 37, marginTop: 18 },
+  source: { fontFamily: 'Inter_700Bold', fontSize: 30, lineHeight: 37, marginTop: 18 },
   translationCard: { borderRadius: 23, padding: 21, marginTop: 20, minHeight: 205 },
   translationLabel: { color: '#fce8df', fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1.4 },
-  hausa: { color: '#fffdf9', fontFamily: 'Inter_700Bold', fontSize: 30, lineHeight: 39, marginTop: 18 },
+  target: { color: '#fffdf9', fontFamily: 'Inter_700Bold', fontSize: 30, lineHeight: 39, marginTop: 18 },
   cardRule: { height: 1, backgroundColor: '#edaa91', marginTop: 22, marginBottom: 16 },
   pronunciationLabel: { color: '#fce8df', fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 1.2 },
   pronunciation: { color: '#fffdf9', fontFamily: 'Inter_400Regular', fontSize: 15, fontStyle: 'italic', marginTop: 7 },

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Phrase } from '@/types/phrase';
 import type { UserRecording } from '@/context/AppContext';
 import type { AlertOptions } from '@/components/AlertDialog';
@@ -83,23 +83,29 @@ async function playUriWeb(uri: string): Promise<boolean> {
   });
 }
 
-// Native audio playback using expo-av
 async function playUriNative(uri: string): Promise<boolean> {
   try {
-    // Configure audio mode
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
     });
 
-    // Create sound object
-    const { sound } = await Audio.Sound.createAsync(
-      { uri },
-      { shouldPlay: true }
-    );
+    const player = createAudioPlayer(uri);
+    // Wait for player to load if needed
+    await new Promise<void>((resolve) => {
+      let attempts = 0;
+      const checkLoaded = () => {
+        attempts++;
+        if (player.isLoaded || attempts > 50) {
+          resolve();
+        } else {
+          setTimeout(checkLoaded, 100);
+        }
+      };
+      checkLoaded();
+    });
+    player.play();
 
-    // Wait for playback to finish
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       const timer = setTimeout(() => {
@@ -107,24 +113,71 @@ async function playUriNative(uri: string): Promise<boolean> {
         settled = true;
         resolve();
       }, 30_000);
-      sound.setOnPlaybackStatusUpdate((status) => {
+
+      const handleStatusUpdate = (status: any) => {
         if (settled) return;
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            settled = true;
-            clearTimeout(timer);
-            resolve();
-          }
-        } else if (status.error) {
+        if (status.didJustFinish) {
           settled = true;
           clearTimeout(timer);
-          reject(new Error(status.error));
+          try {
+            player.removeListener('playbackStatusUpdate', handleStatusUpdate);
+          } catch {}
+          resolve();
+          return;
         }
-      });
+        if (!status.playing && status.isLoaded && status.currentTime >= (status.duration || 0) && (status.duration || 0) > 0) {
+          settled = true;
+          clearTimeout(timer);
+          try {
+            player.removeListener('playbackStatusUpdate', handleStatusUpdate);
+          } catch {}
+          resolve();
+          return;
+        }
+      };
+
+      try {
+        player.addListener('playbackStatusUpdate', handleStatusUpdate);
+      } catch (e) {
+        // If listener can't be added, fall back to polling
+      }
+
+      const interval = setInterval(() => {
+        if (settled) return;
+        const status = player.currentStatus;
+        if (status?.didJustFinish) {
+          settled = true;
+          clearTimeout(timer);
+          clearInterval(interval);
+          try {
+            player.removeListener('playbackStatusUpdate', handleStatusUpdate);
+          } catch {}
+          resolve();
+          return;
+        }
+        if (!player.playing && player.isLoaded && (player.duration || 0) > 0 && player.currentTime >= player.duration) {
+          settled = true;
+          clearTimeout(timer);
+          clearInterval(interval);
+          try {
+            player.removeListener('playbackStatusUpdate', handleStatusUpdate);
+          } catch {}
+          resolve();
+          return;
+        }
+      }, 100);
     });
 
-    // Unload sound after playback
-    await sound.unloadAsync();
+    try {
+      player.pause();
+    } catch {
+      // ignore
+    }
+    try {
+      player.remove();
+    } catch {
+      // ignore
+    }
     return true;
   } catch (error) {
     console.error('Native audio playback error:', error);
@@ -172,7 +225,7 @@ export async function playAudioUrl(uri: string): Promise<boolean> {
   }
 }
 
-export async function playPhraseAudio(phrase: Phrase): Promise<boolean> {
+export async function playPhraseAudio(phrase: Phrase, audioUrl?: string | null): Promise<boolean> {
   // Try user recording first
   const userUri = userRecordingUri(phrase.id);
   if (userUri) {
@@ -184,17 +237,17 @@ export async function playPhraseAudio(phrase: Phrase): Promise<boolean> {
   }
 
   // Check if phrase has audio URL
-  if (!phrase.audioUrl) {
+  if (!audioUrl) {
     alertNativeOrCustom(
       'info',
       'Native audio coming soon',
-      'This phrase is ready for a recorded Hausa-speaking voice. Audio has not been attached yet.',
+      'This phrase is ready for a recorded voice. Audio has not been attached yet.',
     );
     return false;
   }
 
   try {
-    return await playUri(phrase.audioUrl);
+    return await playUri(audioUrl);
   } catch (err) {
     console.error('❌ Playback failed:', err);
     alertNativeOrCustom(

@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-export const API_BASE_URL = 'https://bama-server-9d2g.onrender.com/api/v1';
-// export const API_BASE_URL = 'http://192.168.1.118:4000/api/v1';
+// export const API_BASE_URL = 'https://bama-server-9d2g.onrender.com/api/v1';
+export const API_BASE_URL = 'http://192.168.1.118:4000/api/v1';
 
 
 
@@ -24,6 +24,16 @@ export interface ApiCategory {
   updatedAt?: string;
 }
 
+export interface Language {
+  code: string;
+  name: string;
+  nativeName: string;
+  isRTL: boolean;
+  flag: string;
+  isActive: boolean;
+  order: number;
+}
+
 export interface AudioMeta {
   url?: string;
   storageKey?: string;
@@ -32,19 +42,25 @@ export interface AudioMeta {
   duration?: number;
 }
 
-export interface ExampleSentence {
-  english?: string;
-  hausa?: string;
-}
+/** Audio URLs keyed by language code (e.g., { en: null, ha: 'url', yo: 'url' }) */
+export type AudioMap = Record<string, string | null | AudioMeta>;
+
+/** Translations keyed by language code (e.g., { en: 'Hello', ha: 'Sannu', yo: 'Bawo' }) */
+export type Translations = Record<string, string>;
+
+/** Example sentences keyed by language code */
+export type ExampleSentenceMap = Record<string, string>;
 
 export interface ApiWord {
   _id: string;
-  english: string;
-  hausa: string;
+  /** Translations keyed by language code */
+  translations: Translations;
   description?: string;
   categoryId: string | ApiCategory;
-  exampleSentence?: ExampleSentence;
-  audio?: AudioMeta;
+  /** Example sentences keyed by language code */
+  exampleSentence?: ExampleSentenceMap;
+  /** Audio URLs keyed by language code */
+  audio?: AudioMap;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   version: number;
   createdAt?: string;
@@ -53,10 +69,11 @@ export interface ApiWord {
 
 export interface ApiPhrase {
   _id: string;
-  english: string;
-  hausa: string;
+  /** Translations keyed by language code */
+  translations: Translations;
   categoryId: string | ApiCategory;
-  audio?: AudioMeta;
+  /** Audio URLs keyed by language code */
+  audio?: AudioMap;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   version: number;
   createdAt?: string;
@@ -74,15 +91,18 @@ export type IssueCategory =
   | 'BROKEN_AUDIO'
   | 'OTHER';
 
+/** Translations keyed by language code for contributions */
+export type ContributionTranslations = Record<string, string>;
+
 export interface Contribution {
   _id: string;
   type: ContributionType;
   status: ContributionStatus;
   installationId?: string;
-  english?: string;
-  hausa?: string;
-  suggestedEnglish?: string;
-  suggestedHausa?: string;
+  /** Translations keyed by language code */
+  translations?: ContributionTranslations;
+  /** Suggested translations for corrections */
+  suggestedTranslations?: ContributionTranslations;
   categoryId?: string;
   contentType?: 'word' | 'phrase';
   contentId?: string;
@@ -234,6 +254,10 @@ export async function fetchCategories(): Promise<ApiCategory[]> {
   return request<ApiCategory[]>('/categories');
 }
 
+export async function fetchLanguages(): Promise<Language[]> {
+  return request<Language[]>('/languages');
+}
+
 export async function fetchAds(params: {
   type?: AdType;
   placement?: string;
@@ -324,7 +348,17 @@ export async function createContribution<
         issueCategory?: IssueCategory;
         installationId: string;
       }
-    | { type: 'AUDIO'; contentType: 'word' | 'phrase'; contentId: string; notes?: string; installationId: string },
+    | {
+        type: 'AUDIO';
+        contentType: 'word' | 'phrase';
+        contentId: string;
+        notes?: string;
+        /** ISO language code the recording pronounces (e.g. 'ha'). Sent from the
+         *  user's selected target language at record time so the server can merge
+         *  it into the per-language audio map without clobbering other languages. */
+        language?: string;
+        installationId: string;
+      },
 >(body: T): Promise<Contribution> {
   return request<Contribution>('/contributions', {
     method: 'POST',

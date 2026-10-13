@@ -15,15 +15,17 @@ interface PhraseCardProps {
 
 export function PhraseCard({ phrase, onPress, compact = false, horizontal = false }: PhraseCardProps) {
   const colors = useColors();
-  const { isFavorite, toggleFavorite } = useApp();
+  const { isFavorite, toggleFavorite, getTranslation, getAudioUrl } = useApp();
   const [isPlaying, setIsPlaying] = useState(false);
   const favorite = isFavorite(phrase.id);
+  const translation = getTranslation(phrase);
+  const audioUrl = getAudioUrl(phrase);
 
   const handleAudioPress = async () => {
     if (isPlaying) return;
     setIsPlaying(true);
     try {
-      await playPhraseAudio(phrase);
+      await playPhraseAudio(phrase, audioUrl);
     } finally {
       setIsPlaying(false);
     }
@@ -36,13 +38,10 @@ export function PhraseCard({ phrase, onPress, compact = false, horizontal = fals
           onPress={onPress}
           style={({ pressed }) => [styles.copy, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel={`Open phrase ${phrase.english}`}
+          accessibilityLabel={`Open phrase ${translation}`}
         >
-          <Text style={[styles.english, { color: colors.foreground }]} numberOfLines={compact ? 1 : 2}>
-            {phrase.english}
-          </Text>
-          <Text style={[styles.hausa, { color: colors.primary }]} numberOfLines={compact ? 1 : 3}>
-            {phrase.hausa}
+          <Text style={[styles.source, { color: colors.foreground }]} numberOfLines={compact ? 1 : 2}>
+            {translation}
           </Text>
           {!compact ? (
             <Text style={[styles.pronunciation, { color: colors.mutedForeground }]} numberOfLines={2}>
@@ -54,17 +53,18 @@ export function PhraseCard({ phrase, onPress, compact = false, horizontal = fals
           <Pressable
             testID={`audio-${phrase.id}`}
             onPress={handleAudioPress}
-            disabled={isPlaying}
+            disabled={isPlaying || !audioUrl}
             style={({ pressed }) => [
               styles.iconButton,
               { backgroundColor: colors.secondary },
               isPlaying && styles.playing,
               pressed && styles.pressed,
+              !audioUrl && styles.disabled,
             ]}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel={isPlaying ? `Playing ${phrase.english}` : `Listen to ${phrase.english}`}
-            accessibilityState={{ busy: isPlaying }}
+            accessibilityLabel={isPlaying ? `Playing ${translation}` : audioUrl ? `Listen to ${translation}` : 'Audio not available'}
+            accessibilityState={{ busy: isPlaying, disabled: !audioUrl }}
           >
             <Feather
               name={isPlaying ? 'pause-circle' : 'volume-2'}
@@ -78,7 +78,7 @@ export function PhraseCard({ phrase, onPress, compact = false, horizontal = fals
             style={[styles.iconButton, { backgroundColor: favorite ? colors.accent : colors.secondary }]}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel={favorite ? `Remove ${phrase.english} from favorites` : `Add ${phrase.english} to favorites`}
+            accessibilityLabel={favorite ? `Remove ${translation} from favorites` : `Add ${translation} to favorites`}
           >
             <Feather name={favorite ? 'star' : 'star'} size={17} color={favorite ? colors.accentForeground : colors.secondaryForeground} />
           </Pressable>
@@ -106,10 +106,10 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.72 },
   copy: { flex: 1, gap: 4 },
-  english: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22 },
-  hausa: { fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 23 },
+  source: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22 },
   pronunciation: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, fontStyle: 'italic', marginTop: 2 },
   actions: { flexDirection: 'row', gap: 7 },
   iconButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   playing: { opacity: 0.88 },
+  disabled: { opacity: 0.4 },
 });

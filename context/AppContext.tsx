@@ -3,13 +3,16 @@ import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import React, { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Phrase, PhraseCategory, ContentType } from '@/types/phrase';
+import { Phrase, PhraseCategory, ContentType, getTranslation as getPhraseTranslation, getAudioUrl as getPhraseAudioUrl } from '@/types/phrase';
 import {
   ApiCategory,
   ApiPhrase,
   ApiWord,
+  AudioMeta,
+  Language,
   createContribution,
   fetchCategories,
+  fetchLanguages,
   generateInstallationId,
   getLastPersistedContentVersion,
   loadCategories,
@@ -25,13 +28,19 @@ import {
   Contribution as ApiContribution,
 } from '@/services/api';
 import { invalidateUserRecordingCache, primeUserRecordingCache } from '@/services/audio';
+import { BASE_LANGUAGE_CODE, getDefaultTargetLanguage } from '@/types/language';
 
 const FAVORITES_KEY = '@hausabridge/favorites';
 const DIRECTION_KEY = '@hausabridge/direction';
 const ONBOARDING_KEY = '@hausabridge/onboarding-complete';
 const RECORDINGS_KEY = '@hausabridge/user-recordings';
+const SELECTED_LANGUAGE_KEY = '@hausabridge/selected-language';
 
-export type AppDirection = 'english-to-hausa' | 'hausa-to-english';
+/** Base language code (source of truth for all content) */
+export const BASE_LANGUAGE = BASE_LANGUAGE_CODE;
+
+/** Target language code (the language user is learning) */
+export type TargetLanguage = string;
 
 export interface UserRecording {
   phraseId: string;
@@ -53,7 +62,10 @@ interface AppContextValue {
   isSyncing: boolean;
   lastSyncError: string | null;
   favoriteIds: string[];
-  direction: AppDirection;
+  /** The target language the user is learning (e.g., 'ha', 'yo') */
+  targetLanguage: TargetLanguage;
+  /** The base language (always 'en') */
+  baseLanguage: string;
   hasCompletedOnboarding: boolean;
   userRecordings: Record<string, UserRecording>;
   sync: () => Promise<void>;
@@ -63,25 +75,33 @@ interface AppContextValue {
     recording: UserRecording,
     mimeType: string,
     fileName: string,
+    language: string,
   ) => Promise<ApiContribution>;
   toggleFavorite: (phraseId: string) => void;
   isFavorite: (phraseId: string) => boolean;
-  setDirection: (direction: AppDirection) => void;
+  setTargetLanguage: (languageCode: TargetLanguage) => void;
   completeOnboarding: () => void;
   saveUserRecording: (rec: UserRecording) => Promise<UserRecording>;
   deleteUserRecording: (phraseId: string) => Promise<void>;
   getUserRecording: (phraseId: string) => UserRecording | undefined;
   getPhraseById: (id: string) => Phrase | undefined;
   getCategoryBySlug: (slug: string) => ApiCategory | undefined;
+  /** Get translation for a phrase in the current target language */
+  getTranslation: (phrase: Phrase) => string;
+  /** Get audio URL for a phrase in the current target language */
+  getAudioUrl: (phrase: Phrase) => string | null;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 function normalizeToFrontend(
-  items: (ApiWord | ApiPhrase)[],
+  items: (ApiWord | ApiPhrase)[] | undefined | null,
   categoriesById: Record<string, ApiCategory>,
   contentType: ContentType,
+  targetLanguage: TargetLanguage,
+  baseLanguage: string,
 ): Phrase[] {
+  if (!Array.isArray(items)) return [];
   return items.map((item) => {
     const categoryRef = item.categoryId;
     let category = '';
@@ -90,15 +110,27 @@ function normalizeToFrontend(
     } else if (categoryRef && typeof categoryRef === 'object') {
       category = (categoryRef as ApiCategory).name;
     }
-    const audioUrl = (item as ApiPhrase | ApiWord).audio?.url ?? null;
-    const pronunciation = (item as ApiWord).exampleSentence?.hausa ?? (item as ApiPhrase | ApiWord).hausa;
+
+    // Get audio for target language, fallback to base language
+    const audioMap = (item.audio ?? {}) as Record<string, string | AudioMeta | null | undefined>;
+    const targetAudio = audioMap[targetLanguage];
+    const baseAudio = audioMap[baseLanguage];
+    const audioUrl = (typeof targetAudio === 'object' && targetAudio?.url) ? targetAudio.url :
+      (typeof baseAudio === 'object' && baseAudio?.url) ? baseAudio.url :
+      (typeof targetAudio === 'string') ? targetAudio :
+      (typeof baseAudio === 'string') ? baseAudio :
+      null;
+
+    // Get pronunciation from example sentence (words only) or translation
+    const exampleSentence = 'exampleSentence' in item ? (item.exampleSentence ?? {}) : {};
+    const pronunciation = exampleSentence[targetLanguage] ?? item.translations[targetLanguage] ?? item.translations[baseLanguage] ?? '';
+
     return {
       id: item._id,
       category,
-      english: item.english,
-      hausa: item.hausa,
+      translations: item.translations,
       pronunciation,
-      audioUrl,
+      audio: audioMap as Record<string, string | null>,
       isFavorite: false,
       contentType,
     };
@@ -107,7 +139,6 @@ function normalizeToFrontend(
 
 export function AppProvider({ children }: PropsWithChildren) {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  const [direction, setDirectionState] = useState<AppDirection>('english-to-hausa');
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [userRecordings, setUserRecordings] = useState<Record<string, UserRecording>>({});
@@ -120,6 +151,13 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
+  // Language state
+  const [targetLanguage, setTargetLanguageState] = useState<TargetLanguage>(() => {
+    // Default to Hausa if available, otherwise first active non-base language
+    return 'ha';
+  });
+  const [baseLanguage] = useState<string>(BASE_LANGUAGE);
+
   const categoriesById = useMemo(() => {
     const map: Record<string, ApiCategory> = {};
     for (const c of categories) map[c._id] = c;
@@ -128,10 +166,10 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   const phrases = useMemo<Phrase[]>(
     () => [
-      ...normalizeToFrontend(rawWords, categoriesById, 'word'),
-      ...normalizeToFrontend(rawPhrases, categoriesById, 'phrase'),
+      ...normalizeToFrontend(rawWords, categoriesById, 'word', targetLanguage, baseLanguage),
+      ...normalizeToFrontend(rawPhrases, categoriesById, 'phrase', targetLanguage, baseLanguage),
     ],
-    [categoriesById, rawPhrases, rawWords],
+    [categoriesById, rawPhrases, rawWords, targetLanguage, baseLanguage],
   );
 
   const getPhraseById = useCallback(
@@ -234,6 +272,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       recording: UserRecording,
       mimeType: string,
       fileName: string,
+      language: string,
     ): Promise<ApiContribution> => {
       if (!installationId) throw new Error('App is not registered yet');
       const contribution = await createContribution({
@@ -241,6 +280,10 @@ export function AppProvider({ children }: PropsWithChildren) {
         contentType,
         contentId: phraseId,
         notes: 'Pronunciation recording submitted from mobile app',
+        // Tell the server which language this recording pronounces so it can
+        // merge it into the per-language audio map without clobbering other
+        // languages' recordings.
+        language,
         installationId,
       });
       const durationSeconds = Math.max(0, Math.floor(recording.durationMs / 1000));
@@ -267,7 +310,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       try {
         const [
           storedFavorites,
-          storedDirection,
+          storedTargetLanguage,
           storedOnboarding,
           storedRecordings,
           storedCategories,
@@ -277,7 +320,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           instId,
         ] = await Promise.all([
           AsyncStorage.getItem(FAVORITES_KEY),
-          AsyncStorage.getItem(DIRECTION_KEY),
+          AsyncStorage.getItem(SELECTED_LANGUAGE_KEY),
           AsyncStorage.getItem(ONBOARDING_KEY),
           AsyncStorage.getItem(RECORDINGS_KEY),
           loadCategories(),
@@ -288,9 +331,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         ]);
         if (!active) return;
         if (storedFavorites) setFavoriteIds(JSON.parse(storedFavorites) as string[]);
-        if (storedDirection === 'hausa-to-english' || storedDirection === 'english-to-hausa') {
-          setDirectionState(storedDirection);
-        }
+        if (storedTargetLanguage) setTargetLanguageState(storedTargetLanguage);
         if (storedOnboarding === 'true') setHasCompletedOnboarding(true);
         if (storedRecordings) {
           try {
@@ -322,8 +363,8 @@ export function AppProvider({ children }: PropsWithChildren) {
   }, [favoriteIds, isReady]);
 
   useEffect(() => {
-    if (isReady) void AsyncStorage.setItem(DIRECTION_KEY, direction);
-  }, [direction, isReady]);
+    if (isReady) void AsyncStorage.setItem(SELECTED_LANGUAGE_KEY, targetLanguage);
+  }, [targetLanguage, isReady]);
 
   useEffect(() => {
     if (isReady) void AsyncStorage.setItem(RECORDINGS_KEY, JSON.stringify(userRecordings));
@@ -369,6 +410,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           rec,
           mimeType,
           `phrase-${phraseOnServer._id}-${rec.createdAt}.${extension}`,
+          targetLanguage,
         );
 
         const next: UserRecording = {
@@ -387,7 +429,7 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
         return rec;
       }
     },
-    [installationId, rawPhrases, rawWords, submitAudioContribution],
+    [installationId, rawPhrases, rawWords, submitAudioContribution, targetLanguage],
   );
 
   const deleteUserRecording = useCallback(async (phraseId: string) => {
@@ -415,6 +457,14 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
     [userRecordings],
   );
 
+  const setTargetLanguage = useCallback((languageCode: TargetLanguage) => {
+    void Haptics.selectionAsync();
+    setTargetLanguageState(languageCode);
+  }, []);
+
+  const getTranslation = useCallback((phrase: Phrase): string => getPhraseTranslation(phrase, targetLanguage, baseLanguage), [targetLanguage, baseLanguage]);
+  const getAudioUrl = useCallback((phrase: Phrase): string | null => getPhraseAudioUrl(phrase, targetLanguage, baseLanguage), [targetLanguage, baseLanguage]);
+
   const value = useMemo<AppContextValue>(
     () => ({
       installationId,
@@ -427,7 +477,8 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
       isSyncing,
       lastSyncError,
       favoriteIds,
-      direction,
+      targetLanguage,
+      baseLanguage,
       hasCompletedOnboarding,
       userRecordings,
       sync,
@@ -441,10 +492,7 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
         );
       },
       isFavorite: (phraseId) => favoriteIds.includes(phraseId),
-      setDirection: (nextDirection) => {
-        void Haptics.selectionAsync();
-        setDirectionState(nextDirection);
-      },
+      setTargetLanguage,
       completeOnboarding: () => {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setHasCompletedOnboarding(true);
@@ -455,12 +503,13 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
       getUserRecording,
       getPhraseById,
       getCategoryBySlug,
+      getTranslation,
+      getAudioUrl,
     }),
     [
       categories,
       contentVersion,
       deleteUserRecording,
-      direction,
       favoriteIds,
       getCategoryBySlug,
       getPhraseById,
@@ -477,6 +526,11 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
       submitAudioContribution,
       sync,
       userRecordings,
+      targetLanguage,
+      baseLanguage,
+      setTargetLanguage,
+      getTranslation,
+      getAudioUrl,
     ],
   );
 

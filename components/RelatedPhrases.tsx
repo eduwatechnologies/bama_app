@@ -6,6 +6,7 @@ import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 import { PhraseCard } from './PhraseCard';
 import type { Phrase } from '@/types/phrase';
+import { getTranslation } from '@/types/phrase';
 
 interface RelatedPhrasesProps {
   current: Phrase;
@@ -37,16 +38,16 @@ function overlap(a: Set<string>, b: Set<string>): number {
 export function RelatedPhrases({ current, limit = 6 }: RelatedPhrasesProps) {
   const colors = useColors();
   const router = useRouter();
-  const { phrases, categories } = useApp();
+  const { phrases, categories, targetLanguage, baseLanguage } = useApp();
 
   const related = useMemo(() => {
-    const currentTokens = tokenSet(`${current.english} ${current.hausa}`);
+    const currentTokens = tokenSet(`${getTranslation(current, baseLanguage)} ${getTranslation(current, targetLanguage)}`);
     return phrases
       .filter((item) => item.id !== current.id)
       .map((item) => ({
         item,
         sameCategory: item.category === current.category,
-        score: overlap(currentTokens, tokenSet(`${item.english} ${item.hausa}`)),
+        score: overlap(currentTokens, tokenSet(`${getTranslation(item, baseLanguage)} ${getTranslation(item, targetLanguage)}`)),
       }))
       .filter((entry) => entry.sameCategory || entry.score > 0)
       .sort((a, b) => {
@@ -56,7 +57,7 @@ export function RelatedPhrases({ current, limit = 6 }: RelatedPhrasesProps) {
       })
       .slice(0, limit)
       .map((entry) => entry.item);
-  }, [current, phrases]);
+  }, [current, phrases, targetLanguage, baseLanguage]);
 
   if (related.length === 0) return null;
 

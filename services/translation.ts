@@ -1,6 +1,8 @@
 import { Phrase } from '@/types/phrase';
 
-export type TranslationDirection = 'english-to-hausa' | 'hausa-to-english';
+/** Source and target language codes (e.g., 'en', 'ha', 'yo') */
+export type LanguageCode = string;
+
 export type MatchKind = 'exact' | 'approximate';
 
 export interface TranslationResult {
@@ -10,6 +12,8 @@ export interface TranslationResult {
   translation: string | null;
   phrase: Phrase | null;
   alternatives: Phrase[];
+  sourceLanguage: LanguageCode;
+  targetLanguage: LanguageCode;
 }
 
 const PUNCTUATION = /[?!.。,;:'"“”‘’()[\]{}\u060C]/g;
@@ -81,7 +85,8 @@ export function scoreTranslationMatch(input: string, value: string): number {
 
 export function findOfflineTranslation(
   input: string,
-  direction: TranslationDirection,
+  sourceLanguage: LanguageCode,
+  targetLanguage: LanguageCode,
   phrasebook: Phrase[],
 ): TranslationResult {
   const source = input.trim();
@@ -92,12 +97,14 @@ export function findOfflineTranslation(
     translation: null,
     phrase: null,
     alternatives: [],
+    sourceLanguage,
+    targetLanguage,
   });
 
   if (!source) return unavailable();
 
-  const sourceField = (item: Phrase): string =>
-    direction === 'english-to-hausa' ? item.english : item.hausa;
+  const sourceField = (item: Phrase): string => item.translations[sourceLanguage] ?? '';
+  const targetField = (item: Phrase): string => item.translations[targetLanguage] ?? '';
 
   const ranked = phrasebook
     .map((item) => ({ item, score: scoreTranslationMatch(source, sourceField(item)) }))
@@ -111,9 +118,11 @@ export function findOfflineTranslation(
     kind: 'match',
     matchKind: normalize(sourceField(best.item)) === normalize(source) ? 'exact' : 'approximate',
     source,
-    translation: direction === 'english-to-hausa' ? best.item.hausa : best.item.english,
+    translation: targetField(best.item),
     phrase: best.item,
     alternatives: ranked.slice(1, 5).map((entry) => entry.item),
+    sourceLanguage,
+    targetLanguage,
   };
 }
 

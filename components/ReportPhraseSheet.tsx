@@ -25,8 +25,10 @@ type ReportMode = 'translation' | 'english' | 'problem' | 'pronunciation';
 interface ReportPhraseSheetProps {
   visible: boolean;
   phraseId: string;
-  english: string;
-  hausa: string;
+  sourceText: string;
+  targetText: string;
+  sourceLabel?: string;
+  targetLabel?: string;
   /** Which server collection this id belongs to; words and phrases are not interchangeable. */
   contentType?: ContentType;
   onClose: () => void;
@@ -37,19 +39,19 @@ const MODES: Array<{ key: ReportMode; icon: string; title: string; hint: string 
     key: 'pronunciation',
     icon: 'mic',
     title: 'Record the pronunciation',
-    hint: 'Record a natural Hausa voice for this phrase.',
+    hint: 'Record a natural voice for this phrase.',
   },
   {
     key: 'translation',
     icon: 'edit-3',
     title: 'Suggest a better translation',
-    hint: 'Tell us the Hausa you would use instead.',
+    hint: 'Tell us the translation you would use instead.',
   },
   {
     key: 'english',
     icon: 'globe',
-    title: 'The English is wrong',
-    hint: 'Suggest the English wording for this phrase.',
+    title: 'The source text is wrong',
+    hint: 'Suggest the source wording for this phrase.',
   },
   {
     key: 'problem',
@@ -78,8 +80,10 @@ const ISSUE_OPTIONS: Array<{ value: IssueCategory; label: string }> = [
 export function ReportPhraseSheet({
   visible,
   phraseId,
-  english,
-  hausa,
+  sourceText,
+  targetText,
+  sourceLabel = 'English',
+  targetLabel = 'Target',
   contentType = 'phrase',
   onClose,
 }: ReportPhraseSheetProps) {
@@ -230,10 +234,10 @@ export function ReportPhraseSheet({
 
           <View style={[styles.quote, { backgroundColor: colors.secondary }]}>
             <Text style={[styles.quoteEnglish, { color: colors.foreground }]} numberOfLines={2}>
-              {english}
+              {sourceText}
             </Text>
             <Text style={[styles.quoteHausa, { color: colors.primary }]} numberOfLines={2}>
-              {hausa}
+              {targetText}
             </Text>
           </View>
 
@@ -285,18 +289,18 @@ export function ReportPhraseSheet({
             </View>
 
             {kind === 'pronunciation' ? (
-              <RecordPronunciation phraseId={phraseId} languageLabel="Hausa" embedded />
+              <RecordPronunciation phraseId={phraseId} languageLabel={targetLabel} embedded />
             ) : (
               <>
                 {kind !== 'problem' ? (
                   <View style={styles.field}>
                     <Text style={[styles.label, { color: colors.foreground }]}>
-                      {kind === 'translation' ? 'Correct Hausa' : 'Correct English'}
+                      {kind === 'translation' ? `Correct ${targetLabel}` : `Correct ${sourceLabel}`}
                     </Text>
                     <TextInput
                       value={suggestion}
                       onChangeText={setSuggestion}
-                      placeholder={kind === 'translation' ? hausa : english}
+                      placeholder={kind === 'translation' ? targetText : sourceText}
                       placeholderTextColor={colors.mutedForeground}
                       multiline
                       style={[

@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { BASE_LANGUAGE } from '@/context/AppContext';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { direction, setDirection } = useApp();
+  const { targetLanguage, setTargetLanguage, baseLanguage } = useApp();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.content, { paddingTop: topInset + 18, paddingBottom: Platform.OS === 'web' ? 118 : 98 }]} showsVerticalScrollIndicator={false}>
@@ -19,11 +20,11 @@ export default function SettingsScreen() {
       <Text style={[styles.title, { color: colors.foreground }]}>Make it yours.</Text>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>A few simple choices for your offline phrasebook.</Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Language direction</Text>
+      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Learning Language</Text>
       <View style={[styles.settingCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={[styles.settingIcon, { backgroundColor: colors.accent }]}><Feather name="repeat" size={18} color={colors.accentForeground} /></View>
-        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Default translation</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>Choose the direction used on Translate.</Text></View>
-        <LanguageSelector direction={direction} onChange={setDirection} />
+        <View style={[styles.settingIcon, { backgroundColor: colors.accent }]}><Feather name="globe" size={18} color={colors.accentForeground} /></View>
+        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Target Language</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>Choose the language you want to learn.</Text></View>
+        <LanguageSelector targetLanguage={targetLanguage} onChange={setTargetLanguage} baseLanguage={baseLanguage} />
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About</Text>

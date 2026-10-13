@@ -2,8 +2,8 @@ import { CategoryMeta, Phrase, PhraseCategory } from '@/types/phrase';
 
 /**
  * Phrase translations are intentionally kept in one reviewable file.
- * Hausa-speaking reviewers can update english, hausa, pronunciation, and
- * audioUrl here without needing to touch the screens or translation service.
+ * Reviewers can update the translations map (keyed by language code) and
+ * pronunciation here without needing to touch the screens or translation service.
  *
  * These categories are only used when the server is unreachable. Once synced,
  * categories come from the dashboard.
@@ -27,10 +27,9 @@ const phrase = (
 ): Phrase => ({
   id,
   category,
-  english,
-  hausa,
+  translations: { en: english, ha: hausa },
   pronunciation,
-  audioUrl: null,
+  audio: { en: null, ha: null },
   isFavorite: false,
   contentType: 'phrase' as const,
 });
