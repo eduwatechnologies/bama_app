@@ -73,7 +73,7 @@ export default function PhraseDetailScreen() {
           </View>
       </View>
 
-      <PhraseWords phraseId={phrase.id} targetLanguage={targetLanguage} />
+      {/* <PhraseWords phraseId={phrase.id} targetLanguage={targetLanguage} /> */}
 
       <View style={styles.actionRow}>
         <AudioButton phrase={phrase} />

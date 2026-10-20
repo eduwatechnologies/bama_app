@@ -1,28 +1,56 @@
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, Modal, ScrollView } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { TargetLanguage } from '@/context/AppContext';
-import { getActiveLanguages, BASE_LANGUAGE_CODE, Language } from '@/types/language';
+import { TargetLanguage, useApp } from '@/context/AppContext';
+import { Language } from '@/services/api';
 
 interface LanguageSelectorProps {
   targetLanguage: TargetLanguage;
   onChange: (languageCode: TargetLanguage) => void;
-  baseLanguage?: string;
+  /** Show the base/source language (English) as a selectable option. Off by default. */
+  includeBase?: boolean;
   showModal?: boolean;
+  /** Render the language as a static, non-interactive chip. */
+  readOnly?: boolean;
 }
 
-export function LanguageSelector({ targetLanguage, onChange, baseLanguage = BASE_LANGUAGE_CODE, showModal = true }: LanguageSelectorProps) {
+export function LanguageSelector({ targetLanguage, onChange, includeBase = false, showModal = true, readOnly = false }: LanguageSelectorProps) {
   const colors = useColors();
+  const { languages, baseLanguage } = useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
-  
-  const activeLanguages = getActiveLanguages().filter(lang => lang.code !== baseLanguage);
-  const currentLanguage = activeLanguages.find(lang => lang.code === targetLanguage) ?? activeLanguages[0];
+
+  // Languages are administered on the backend and synced into the app context.
+  const activeLanguages = useMemo<Language[]>(
+    () =>
+      languages
+        .filter((lang) => lang.isActive)
+        .filter((lang) => includeBase || lang.code !== baseLanguage)
+        .sort((a, b) => a.order - b.order),
+    [languages, includeBase, baseLanguage],
+  );
+
+  const currentLanguage =
+    languages.find((lang) => lang.code === targetLanguage) ?? activeLanguages[0];
 
   const handleLanguageSelect = (languageCode: TargetLanguage) => {
     onChange(languageCode);
     if (showModal) setIsModalVisible(false);
   };
+
+  if (readOnly) {
+    // Static chip — displays the current language without allowing changes.
+    return (
+      <View style={[styles.trigger, { backgroundColor: colors.secondary }]}>
+        <View style={styles.triggerContent}>
+          <Text style={styles.triggerFlag}>{currentLanguage?.flag || '🌐'}</Text>
+          <Text style={[styles.triggerLabel, { color: colors.foreground }]}>
+            {currentLanguage?.nativeName || targetLanguage}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!showModal) {
     // Simple inline selector for compact spaces

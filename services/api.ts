@@ -2,14 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// export const API_BASE_URL = 'https://bama-server-9d2g.onrender.com/api/v1';
-export const API_BASE_URL = 'http://192.168.1.118:4000/api/v1';
+export const API_BASE_URL = 'https://bama-server-9d2g.onrender.com/api/v1';
+// export const API_BASE_URL = 'http://192.168.1.118:4000/api/v1';
 
 
 
 const INSTALLATION_ID_KEY = '@hausabridge/installationId';
 const CONTENT_VERSION_KEY = '@hausabridge/contentVersion';
 const CATEGORIES_KEY = '@hausabridge/categories';
+const LANGUAGES_KEY = '@hausabridge/languages';
 const WORDS_KEY = '@hausabridge/words';
 const PHRASES_KEY = '@hausabridge/phrases';
 
@@ -256,6 +257,20 @@ export async function fetchCategories(): Promise<ApiCategory[]> {
 
 export async function fetchLanguages(): Promise<Language[]> {
   return request<Language[]>('/languages');
+}
+
+export async function persistLanguages(languages: Language[]): Promise<void> {
+  await AsyncStorage.setItem(LANGUAGES_KEY, JSON.stringify(languages));
+}
+
+export async function loadLanguages(): Promise<Language[]> {
+  const raw = await AsyncStorage.getItem(LANGUAGES_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as Language[];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchAds(params: {

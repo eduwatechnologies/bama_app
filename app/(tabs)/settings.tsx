@@ -12,7 +12,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { targetLanguage, setTargetLanguage, baseLanguage } = useApp();
+  const { targetLanguage, setTargetLanguage } = useApp();
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.content, { paddingTop: topInset + 18, paddingBottom: Platform.OS === 'web' ? 118 : 98 }]} showsVerticalScrollIndicator={false}>
@@ -24,13 +24,23 @@ export default function SettingsScreen() {
       <View style={[styles.settingCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.settingIcon, { backgroundColor: colors.accent }]}><Feather name="globe" size={18} color={colors.accentForeground} /></View>
         <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Target Language</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>Choose the language you want to learn.</Text></View>
-        <LanguageSelector targetLanguage={targetLanguage} onChange={setTargetLanguage} baseLanguage={baseLanguage} />
+        <LanguageSelector targetLanguage={targetLanguage} onChange={setTargetLanguage} />
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About</Text>
       <Pressable onPress={() => router.push('/about')} style={[styles.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
         <View style={[styles.settingIcon, { backgroundColor: `${colors.primary}16` }]}><Feather name="info" size={18} color={colors.primary} /></View>
         <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>About Bama</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>Why this tool exists and how to review the content.</Text></View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </Pressable>
+      <Pressable onPress={() => router.push('/privacy')} style={[styles.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
+        <View style={[styles.settingIcon, { backgroundColor: `${colors.primary}16` }]}><Feather name="shield" size={18} color={colors.primary} /></View>
+        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Privacy Policy</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>How Bama handles your data.</Text></View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </Pressable>
+      <Pressable onPress={() => router.push('/terms')} style={[styles.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
+        <View style={[styles.settingIcon, { backgroundColor: `${colors.primary}16` }]}><Feather name="file-text" size={18} color={colors.primary} /></View>
+        <View style={styles.settingCopy}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Terms of Use</Text><Text style={[styles.settingDescription, { color: colors.mutedForeground }]}>Rules for using Bama.</Text></View>
         <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
       </Pressable>
 

@@ -15,6 +15,8 @@ export interface Language {
   flag: string;
   /** Whether this language is available for learning (has content) */
   isActive: boolean;
+  /** Whether this is the base/source language */
+  isBase?: boolean;
   /** Display order in language selectors */
   order: number;
 }
@@ -30,6 +32,7 @@ export const SUPPORTED_LANGUAGES: Language[] = [
     nativeName: 'English',
     isRTL: false,
     flag: '🇺🇸',
+    isBase: true,
     isActive: true,
     order: 0,
   },

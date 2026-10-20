@@ -19,19 +19,21 @@ export default function TranslateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ sourceLang?: string; targetLang?: string }>();
+  const params = useLocalSearchParams<{ direction?: string }>();
   const {
     targetLanguage: savedTargetLanguage,
-    setTargetLanguage,
     baseLanguage,
     phrases,
     isSyncing,
     lastSyncError
   } = useApp();
-  
-  // Use URL params or saved preferences
-  const targetLanguage = params.targetLang ?? savedTargetLanguage;
-  const sourceLanguage = params.sourceLang ?? baseLanguage;
+
+  // The learning language is a global setting, so the URL only carries the
+  // translation direction. This keeps the screen in sync when the user changes
+  // the target language in settings (persisted route params would get stale).
+  const isReverse = params.direction === 'reverse';
+  const sourceLanguage = isReverse ? savedTargetLanguage : baseLanguage;
+  const targetLanguage = isReverse ? baseLanguage : savedTargetLanguage;
   
   const [input, setInput] = useState('');
   const useStaticFallback = !phrases.length && !isSyncing;
@@ -50,10 +52,9 @@ export default function TranslateScreen() {
   const targetLabel = targetLangInfo?.name.toUpperCase() ?? targetLanguage.toUpperCase();
 
   const swap = () => {
-    // Swap source and target languages
-    setTargetLanguage(sourceLanguage);
-    // Note: baseLanguage is fixed to 'en', so we can't swap to make target the source
-    // Instead, we just clear input and let user change target language via selector
+    // Toggle the direction: the learning language stays global and is never
+    // baked into the route params.
+    router.setParams({ direction: isReverse ? 'forward' : 'reverse' });
     setInput('');
   };
 
@@ -64,21 +65,11 @@ export default function TranslateScreen() {
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Look up a phrase or a single word from the offline phrasebook. Closest match is shown when there is no exact entry.</Text>
       
       <View style={styles.languageRow}>
-        <LanguageSelector
-          targetLanguage={targetLanguage}
-          onChange={(next) => { setTargetLanguage(next); setInput(''); }}
-          baseLanguage={baseLanguage}
-          showModal={true}
-        />
+       
         <Pressable onPress={swap} style={[styles.swapButton, { borderColor: colors.border, backgroundColor: colors.secondary }]} accessibilityRole="button" accessibilityLabel="Swap languages">
           <Feather name="repeat" size={16} color={colors.secondaryForeground} />
         </Pressable>
-        <LanguageSelector
-          targetLanguage={sourceLanguage}
-          onChange={() => {}} // Source is fixed to base language for now
-          baseLanguage={baseLanguage}
-          showModal={false}
-        />
+        <LanguageSelector targetLanguage={targetLanguage} onChange={() => {}} readOnly />
       </View>
 
       <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

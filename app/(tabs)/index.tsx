@@ -1,7 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
@@ -35,7 +34,7 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { phrases, categories, isReady, isSyncing } = useApp();
+  const { phrases, categories, isReady, isSyncing, languages, targetLanguage } = useApp();
   const [query, setQuery] = useState('');
   const topInset = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
   const categoryMetas = useMemo(() => categories.map(serverCategoryToMeta), [categories]);
@@ -46,22 +45,17 @@ export default function HomeScreen() {
     () => phrases[(new Date().getDate() - 1) % Math.max(1, phrases.length)] ?? phrases[0],
     [phrases],
   );
-  const [quickFrom, setQuickFrom] = useState<'english' | 'hausa'>('english');
+
+  // Quick translate follows the learning language chosen in settings.
+  const targetLangInfo = useMemo(
+    () => languages.find((lang) => lang.code === targetLanguage),
+    [languages, targetLanguage],
+  );
+  const targetLangName = targetLangInfo?.name ?? targetLanguage.toUpperCase();
+  const targetLangBadge = (targetLangInfo?.code ?? targetLanguage).toUpperCase().slice(0, 2);
 
   const goToSearch = () => router.push(query.trim() ? `/phrases?q=${encodeURIComponent(query.trim())}` : '/phrases');
-  const goToDirection = (direction: 'english-to-hausa' | 'hausa-to-english') => router.push(`/translate?direction=${direction}`);
-
-  const swapQuick = useCallback(() => {
-    void Haptics.selectionAsync();
-    setQuickFrom((prev) => (prev === 'english' ? 'hausa' : 'english'));
-  }, []);
-
-  const activeFromLabel = quickFrom === 'english' ? 'English' : 'Hausa';
-  const activeFromCode = quickFrom === 'english' ? 'EN' : 'HA';
-  const activeToLabel = quickFrom === 'english' ? 'Hausa' : 'English';
-  const activeToCode = quickFrom === 'english' ? 'HA' : 'EN';
-  const activeDirection: 'english-to-hausa' | 'hausa-to-english' =
-    quickFrom === 'english' ? 'english-to-hausa' : 'hausa-to-english';
+  const goToTranslate = (direction: 'forward' | 'reverse') => router.push(`/translate?direction=${direction}`);
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.content, { paddingTop: topInset + 17, paddingBottom: Platform.OS === 'web' ? 118 : 98 }]} showsVerticalScrollIndicator={false}>
@@ -97,15 +91,15 @@ export default function HomeScreen() {
         <Feather name="arrow-up-right" size={16} color={colors.mutedForeground} />
       </View>
       <View style={styles.quickRow}>
-        <Pressable onPress={() => goToDirection('english-to-hausa')} style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
+        <Pressable onPress={() => goToTranslate('forward')} style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
           <View style={[styles.quickIcon, { backgroundColor: `${colors.primary}16` }]}><Text style={[styles.quickIconText, { color: colors.primary }]}>EN</Text></View>
           <Text style={[styles.quickLabel, { color: colors.foreground }]}>English</Text>
           <Feather name="arrow-right" size={15} color={colors.mutedForeground} />
-          <Text style={[styles.quickLabel, { color: colors.primary }]}>Hausa</Text>
+          <Text style={[styles.quickLabel, { color: colors.primary }]} numberOfLines={1}>{targetLangName}</Text>
         </Pressable>
-        <Pressable onPress={() => goToDirection('hausa-to-english')} style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
-          <View style={[styles.quickIcon, { backgroundColor: `${colors.accentForeground}16` }]}><Text style={[styles.quickIconText, { color: colors.accentForeground }]}>HA</Text></View>
-          <Text style={[styles.quickLabel, { color: colors.foreground }]}>Hausa</Text>
+        <Pressable onPress={() => goToTranslate('reverse')} style={[styles.quickCard, { backgroundColor: colors.card, borderColor: colors.border }]} accessibilityRole="button">
+          <View style={[styles.quickIcon, { backgroundColor: `${colors.accentForeground}16` }]}><Text style={[styles.quickIconText, { color: colors.accentForeground }]}>{targetLangBadge}</Text></View>
+          <Text style={[styles.quickLabel, { color: colors.foreground }]} numberOfLines={1}>{targetLangName}</Text>
           <Feather name="arrow-right" size={15} color={colors.mutedForeground} />
           <Text style={[styles.quickLabel, { color: colors.accentForeground }]}>English</Text>
         </Pressable>

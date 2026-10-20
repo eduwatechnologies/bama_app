@@ -16,10 +16,12 @@ import {
   generateInstallationId,
   getLastPersistedContentVersion,
   loadCategories,
+  loadLanguages,
   loadPhrases,
   loadWords,
   persistCategories,
   persistContentVersion,
+  persistLanguages,
   persistPhrases,
   persistWords,
   registerInstallation,
@@ -35,6 +37,9 @@ const DIRECTION_KEY = '@hausabridge/direction';
 const ONBOARDING_KEY = '@hausabridge/onboarding-complete';
 const RECORDINGS_KEY = '@hausabridge/user-recordings';
 const SELECTED_LANGUAGE_KEY = '@hausabridge/selected-language';
+
+/** Preferred learning language when the user hasn't picked one yet. */
+const DEFAULT_TARGET_LANGUAGE = 'ha';
 
 /** Base language code (source of truth for all content) */
 export const BASE_LANGUAGE = BASE_LANGUAGE_CODE;
@@ -57,6 +62,7 @@ interface AppContextValue {
   rawWords: ApiWord[];
   rawPhrases: ApiPhrase[];
   phrases: Phrase[];
+  languages: Language[];
   contentVersion: number;
   isReady: boolean;
   isSyncing: boolean;
@@ -147,14 +153,15 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [rawWords, setRawWords] = useState<ApiWord[]>([]);
   const [rawPhrases, setRawPhrases] = useState<ApiPhrase[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([]);
   const [contentVersion, setContentVersion] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
   // Language state
   const [targetLanguage, setTargetLanguageState] = useState<TargetLanguage>(() => {
-    // Default to Hausa if available, otherwise first active non-base language
-    return 'ha';
+    // Default to Hausa; validated against the backend language list once it loads.
+    return DEFAULT_TARGET_LANGUAGE;
   });
   const [baseLanguage] = useState<string>(BASE_LANGUAGE);
 
@@ -228,10 +235,9 @@ export function AppProvider({ children }: PropsWithChildren) {
       const savedVersion = await getLastPersistedContentVersion();
       const base = Math.max(savedVersion, contentVersion);
       const response = await syncContent(id, base);
-      // Categories are admin-managed and are NOT part of the versioned content
-      // change feed, so they can change without serverVersion moving. Always
-      // refetch them; otherwise a category added in the dashboard never reaches
-      // the device until a full sync happens to trigger.
+      // Categories and languages are admin-managed and are NOT part of the
+      // versioned content change feed, so they can change without serverVersion
+      // moving. Always refetch them.
       let latestCategories = categories;
       try {
         latestCategories = await fetchCategories();
@@ -239,6 +245,13 @@ export function AppProvider({ children }: PropsWithChildren) {
         await persistCategories(latestCategories);
       } catch {
         // fall back to cached categories
+      }
+      try {
+        const langs = await fetchLanguages();
+        setLanguages(langs);
+        await persistLanguages(langs);
+      } catch {
+        // keep existing languages
       }
       let words: ApiWord[] = rawWords;
       let phrasesList: ApiPhrase[] = rawPhrases;
@@ -314,6 +327,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           storedOnboarding,
           storedRecordings,
           storedCategories,
+          storedLanguages,
           storedWords,
           storedPhrases,
           storedVersion,
@@ -324,6 +338,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           AsyncStorage.getItem(ONBOARDING_KEY),
           AsyncStorage.getItem(RECORDINGS_KEY),
           loadCategories(),
+          loadLanguages(),
           loadWords(),
           loadPhrases(),
           getLastPersistedContentVersion(),
@@ -343,6 +358,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           }
         }
         if (storedCategories.length > 0) setCategories(storedCategories);
+        if (storedLanguages.length > 0) setLanguages(storedLanguages);
         if (storedWords.length > 0) setRawWords(storedWords);
         if (storedPhrases.length > 0) setRawPhrases(storedPhrases);
         if (storedVersion > 0) setContentVersion(storedVersion);
@@ -361,6 +377,18 @@ export function AppProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (isReady) void AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteIds));
   }, [favoriteIds, isReady]);
+
+  // Keep the selected target language in sync with the backend language list:
+  // once the languages are known, fall back to Hausa (or the first available
+  // non-base language) if the stored choice is no longer learnable.
+  useEffect(() => {
+    if (languages.length === 0) return;
+    const learnable = languages.filter((lang) => lang.isActive && lang.code !== baseLanguage);
+    if (learnable.length === 0) return;
+    if (learnable.some((lang) => lang.code === targetLanguage)) return;
+    const next = learnable.find((lang) => lang.code === DEFAULT_TARGET_LANGUAGE) ?? learnable[0];
+    setTargetLanguageState(next.code);
+  }, [languages, baseLanguage, targetLanguage]);
 
   useEffect(() => {
     if (isReady) void AsyncStorage.setItem(SELECTED_LANGUAGE_KEY, targetLanguage);
@@ -472,6 +500,7 @@ setUserRecordings((prev) => ({ ...prev, [rec.phraseId]: next }));
       rawWords,
       rawPhrases,
       phrases,
+      languages,
       contentVersion,
       isReady,
       isSyncing,

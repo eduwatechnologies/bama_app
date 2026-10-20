@@ -15,7 +15,7 @@ interface PhraseCardProps {
 
 export function PhraseCard({ phrase, onPress, compact = false, horizontal = false }: PhraseCardProps) {
   const colors = useColors();
-  const { isFavorite, toggleFavorite, getTranslation, getAudioUrl } = useApp();
+  const { isFavorite, toggleFavorite, getTranslation, getAudioUrl, baseLanguage } = useApp();
   const [isPlaying, setIsPlaying] = useState(false);
   const favorite = isFavorite(phrase.id);
   const translation = getTranslation(phrase);
@@ -41,13 +41,18 @@ export function PhraseCard({ phrase, onPress, compact = false, horizontal = fals
           accessibilityLabel={`Open phrase ${translation}`}
         >
           <Text style={[styles.source, { color: colors.foreground }]} numberOfLines={compact ? 1 : 2}>
-            {translation}
+                {translation !== phrase.translations[baseLanguage] ? translation : ''}
           </Text>
-          {!compact ? (
-            <Text style={[styles.pronunciation, { color: colors.mutedForeground }]} numberOfLines={2}>
-              {phrase.pronunciation}
-            </Text>
-          ) : null}
+          {/* {!compact ? ( */}
+            <>
+              <Text style={[styles.translation, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {phrase.translations[baseLanguage] ?? translation}
+              </Text>
+              {/* <Text style={[styles.pronunciation, { color: colors.mutedForeground }]} numberOfLines={2}>
+                {phrase.pronunciation}
+              </Text> */}
+            </>
+          {/* ) : null} */}
         </Pressable>
         <View style={styles.actions}>
           <Pressable
@@ -107,6 +112,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72 },
   copy: { flex: 1, gap: 4 },
   source: { fontFamily: 'Inter_600SemiBold', fontSize: 16, lineHeight: 22 },
+  translation: { fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, marginTop: 2 },
   pronunciation: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, fontStyle: 'italic', marginTop: 2 },
   actions: { flexDirection: 'row', gap: 7 },
   iconButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

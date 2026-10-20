@@ -31,6 +31,8 @@ function RootLayoutNav() {
       <Stack.Screen name="voice" options={{ headerShown: false }} />
       <Stack.Screen name="phrase/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="about" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="terms" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -60,7 +62,7 @@ export default function RootLayout() {
               <AppProvider>
                 <AlertProvider>
                   <RootLayoutNav />
-                  <VoiceFab />
+                  {/* <VoiceFab /> */}
                 </AlertProvider>
               </AppProvider>
             </KeyboardProvider>
