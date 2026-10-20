@@ -15,6 +15,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
+import { Platform, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -59,12 +60,19 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
             <KeyboardProvider>
-              <AppProvider>
-                <AlertProvider>
+            <AppProvider>
+              <AlertProvider>
+                {Platform.OS === 'web' ? (
+                  <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#e5e7eb' }}>
+                    <View style={{ flex: 1, width: '100%', maxWidth: 430 }}>
+                      <RootLayoutNav />
+                    </View>
+                  </View>
+                ) : (
                   <RootLayoutNav />
-                  {/* <VoiceFab /> */}
-                </AlertProvider>
-              </AppProvider>
+                )}
+              </AlertProvider>
+            </AppProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
