@@ -9,7 +9,7 @@ import { playPhraseAudio } from '@/services/audio';
 
 export function AudioButton({ phrase }: { phrase: Phrase }) {
   const colors = useColors();
-  const { getAudioUrl } = useApp();
+  const { getAudioUrl, targetLanguage } = useApp();
   const [isPlaying, setIsPlaying] = useState(false);
   const audioUrl = getAudioUrl(phrase);
 
@@ -17,7 +17,7 @@ export function AudioButton({ phrase }: { phrase: Phrase }) {
     if (isPlaying || !audioUrl) return;
     setIsPlaying(true);
     try {
-      await playPhraseAudio(phrase, audioUrl);
+      await playPhraseAudio(phrase, audioUrl, { language: targetLanguage });
     } finally {
       setIsPlaying(false);
     }

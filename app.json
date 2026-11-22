@@ -41,7 +41,16 @@
       "expo-web-browser",
       "expo-audio",
       "expo-asset",
-      "expo-video"
+      "expo-video",
+      "expo-notifications",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Bama to access your photos.",
+          "savePhotosPermission": "Allow Bama to save the word card to your gallery.",
+          "granularPermissions": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

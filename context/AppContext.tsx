@@ -30,6 +30,7 @@ import {
   Contribution as ApiContribution,
 } from '@/services/api';
 import { invalidateUserRecordingCache, primeUserRecordingCache } from '@/services/audio';
+import { flushAdEvents } from '@/services/adTracking';
 import { BASE_LANGUAGE_CODE, getDefaultTargetLanguage } from '@/types/language';
 
 const FAVORITES_KEY = '@hausabridge/favorites';
@@ -401,6 +402,8 @@ export function AppProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isReady) return;
     void sync();
+    // Retry any ad interactions queued while offline on the previous run.
+    void flushAdEvents();
   }, [isReady]);
 
   const saveUserRecording = useCallback(

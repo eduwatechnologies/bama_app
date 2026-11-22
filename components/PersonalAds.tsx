@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import type { ApiAd } from '@/services/api';
+import { trackAdClick } from '@/services/adTracking';
 
 interface PersonalAdsProps {
   ad: ApiAd;
@@ -62,8 +63,12 @@ export function PersonalAds({ ad }: PersonalAdsProps) {
   }, [firstSlide]);
 
   const openTarget = useCallback(() => {
-    if (targetUrl) void Linking.openURL(targetUrl).catch(() => undefined);
-  }, [targetUrl]);
+    if (!targetUrl) return;
+    // Report before opening so the click is counted even if the browser handoff
+    // backgrounds the app.
+    trackAdClick(ad._id, ad.placement, targetUrl);
+    void Linking.openURL(targetUrl).catch(() => undefined);
+  }, [ad._id, ad.placement, targetUrl]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(Math.round(event.nativeEvent.layout.width));

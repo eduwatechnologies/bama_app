@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export const API_BASE_URL = 'https://bama-server-9d2g.onrender.com/api/v1';
-// export const API_BASE_URL = 'http://192.168.1.118:4000/api/v1';
+// export const API_BASE_URL = 'http://10.29.217.90:4000/api/v1';
 
 
 
@@ -121,6 +121,7 @@ export interface Contribution {
 export type AdType = 'GOOGLE' | 'PERSONAL';
 export type AdStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 export type GoogleAdFormat = 'BANNER' | 'INTERSTITIAL' | 'REWARDED' | 'NATIVE';
+export type AdEventType = 'IMPRESSION' | 'CLICK';
 
 export interface GoogleAdPayload {
   adUnitId: string;
@@ -255,6 +256,56 @@ export async function fetchCategories(): Promise<ApiCategory[]> {
   return request<ApiCategory[]>('/categories');
 }
 
+/** Server-provided app-update policy (Play Store version gate). */
+export interface ApiAppVersion {
+  enabled: boolean;
+  latestVersion: string;
+  minVersion: string;
+  storeUrl: string;
+  message: string | null;
+}
+
+export async function fetchAppVersion(): Promise<ApiAppVersion> {
+  return request<ApiAppVersion>('/app/version');
+}
+
+/** Anonymous learning-path progress backup (device remains the source of truth). */
+export interface ApiLearningProgress {
+  learnedWordIds: string[];
+  currentStreak: number;
+  longestStreak: number;
+  lastLearnedDate: string | null;
+  dailyGoal: number;
+}
+
+export async function pushLearningProgress(
+  installationId: string,
+  progress: ApiLearningProgress,
+): Promise<void> {
+  await request<{ progress: ApiLearningProgress }>('/installations/progress', {
+    method: 'POST',
+    body: JSON.stringify({
+      installationId,
+      learnedWordIds: progress.learnedWordIds,
+      currentStreak: progress.currentStreak,
+      longestStreak: progress.longestStreak,
+      // Omitted when null so the merge-only server never clears a stored date.
+      lastLearnedDate: progress.lastLearnedDate ?? undefined,
+      dailyGoal: progress.dailyGoal,
+    }),
+  });
+}
+
+export async function fetchLearningProgress(
+  installationId: string,
+): Promise<ApiLearningProgress | null> {
+  const qs = new URLSearchParams({ installationId });
+  const result = await request<{ progress: ApiLearningProgress } | null>(
+    `/installations/progress?${qs.toString()}`,
+  );
+  return result?.progress ?? null;
+}
+
 export async function fetchLanguages(): Promise<Language[]> {
   return request<Language[]>('/languages');
 }
@@ -284,6 +335,26 @@ export async function fetchAds(params: {
   if (params.limit && params.limit > 0) qs.set('limit', String(params.limit));
   const query = qs.toString();
   return request<ApiAd[]>(`/ads${query ? `?${query}` : ''}`);
+}
+
+export interface AdEventInput {
+  adId: string;
+  type: AdEventType;
+  placement?: string;
+  targetUrl?: string;
+  at?: string;
+}
+
+export async function recordAdEvents(payload: {
+  installationId: string;
+  platform?: string;
+  appVersion?: string;
+  events: AdEventInput[];
+}): Promise<{ accepted: number }> {
+  return request<{ accepted: number }>('/ads/events', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function syncContent(

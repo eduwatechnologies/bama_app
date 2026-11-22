@@ -15,7 +15,7 @@ interface PhraseCardProps {
 
 export function PhraseCard({ phrase, onPress, compact = false, horizontal = false }: PhraseCardProps) {
   const colors = useColors();
-  const { isFavorite, toggleFavorite, getTranslation, getAudioUrl, baseLanguage } = useApp();
+  const { isFavorite, toggleFavorite, getTranslation, getAudioUrl, baseLanguage, targetLanguage } = useApp();
   const [isPlaying, setIsPlaying] = useState(false);
   const favorite = isFavorite(phrase.id);
   const translation = getTranslation(phrase);
@@ -25,7 +25,7 @@ export function PhraseCard({ phrase, onPress, compact = false, horizontal = fals
     if (isPlaying) return;
     setIsPlaying(true);
     try {
-      await playPhraseAudio(phrase, audioUrl);
+      await playPhraseAudio(phrase, audioUrl, { language: targetLanguage });
     } finally {
       setIsPlaying(false);
     }

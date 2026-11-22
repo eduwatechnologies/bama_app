@@ -4,6 +4,7 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Phrase } from '@/types/phrase';
 import type { UserRecording } from '@/context/AppContext';
 import type { AlertOptions } from '@/components/AlertDialog';
+import { resolveAudioUri, cacheAudio, isWeb } from '@/services/audioCache';
 
 const RECORDINGS_KEY = '@hausabridge/user-recordings';
 
@@ -225,8 +226,8 @@ export async function playAudioUrl(uri: string): Promise<boolean> {
   }
 }
 
-export async function playPhraseAudio(phrase: Phrase, audioUrl?: string | null): Promise<boolean> {
-  // Try user recording first
+export async function playPhraseAudio(phrase: Phrase, audioUrl?: string | null, options: { language?: string } = {}): Promise<boolean> {
+  const language = options.language ?? '';
   const userUri = userRecordingUri(phrase.id);
   if (userUri) {
     try {
@@ -236,7 +237,6 @@ export async function playPhraseAudio(phrase: Phrase, audioUrl?: string | null):
     }
   }
 
-  // Check if phrase has audio URL
   if (!audioUrl) {
     alertNativeOrCustom(
       'info',
@@ -246,10 +246,20 @@ export async function playPhraseAudio(phrase: Phrase, audioUrl?: string | null):
     return false;
   }
 
+  const resolved = await resolveAudioUri(phrase.id, language, audioUrl);
   try {
-    return await playUri(audioUrl);
+    const ok = await playUri(resolved.uri);
+    if (ok && !resolved.isCached && !isWeb) {
+      void cacheAudio(phrase.id, language, audioUrl);
+    }
+    return ok;
   } catch (err) {
     console.error('❌ Playback failed:', err);
+    if (resolved.isCached) {
+      try {
+        return await playUri(audioUrl);
+      } catch {}
+    }
     alertNativeOrCustom(
       'error',
       'Playback failed',

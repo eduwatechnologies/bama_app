@@ -64,7 +64,7 @@ export default function PhraseDetailScreen() {
         <Text style={styles.pronunciationLabel}>PRONUNCIATION</Text>
         
           <View style={styles.pronunciationRow}>
-            <Pressable onPress={() => audioUrl && void playPhraseAudio(phrase, audioUrl)} disabled={!audioUrl} style={styles.pronunciationPlay} accessibilityRole="button" accessibilityLabel={audioUrl ? `Listen to pronunciation for ${translation}` : 'Audio not available'}>
+            <Pressable onPress={() => audioUrl && void playPhraseAudio(phrase, audioUrl, { language: targetLanguage })} disabled={!audioUrl} style={styles.pronunciationPlay} accessibilityRole="button" accessibilityLabel={audioUrl ? `Listen to pronunciation for ${translation}` : 'Audio not available'}>
               <Feather name={audioUrl ? 'play' : 'volume-x'} size={16} color={audioUrl ? '#fffdf9' : colors.mutedForeground} />
             </Pressable>
             <View style={styles.pronunciationTextWrap}>
